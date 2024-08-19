@@ -34,6 +34,7 @@ public:
     }
 
 private:
+    //互斥锁变量--初始化一个互斥锁--上锁--解锁--销毁互斥锁
     pthread_mutex_t m_mutex;
 };
 
@@ -50,23 +51,24 @@ public:
         pthread_cond_destroy(&m_cond);
     }
 
-    bool wait(pthread_mutex_t * mutex) {
+    bool wait(pthread_mutex_t * mutex) {    //阻塞等待一个条件变量
         return pthread_cond_wait(&m_cond, mutex) == 0;
     }
 
-    bool timewait(pthread_mutex_t * mutex, struct timespec t) {
+    bool timewait(pthread_mutex_t * mutex, struct timespec t) {  // 当在指定时间t内有信号传过来时，pthread_cond_timedwait()返回0
         return pthread_cond_timedwait(&m_cond, mutex, &t) == 0;
     }
 
-    bool signal() {
+    bool signal() {   //唤醒 至少一个 阻塞在条件变量上的进程
         return pthread_cond_signal(&m_cond) == 0;
     }
 
-    bool broadcast() {
+    bool broadcast() {  //唤醒 全部 阻塞在条件变量上的进程
         return pthread_cond_broadcast(&m_cond) == 0;
     }
 private:
-    pthread_cond_t m_cond;  //条件变量成员
+    //条件变量--初始化条件变量--   --销毁条件变量
+    pthread_cond_t m_cond;  
 };
 
 //3、信号量类
@@ -88,6 +90,8 @@ public:
         sem_destroy(&m_sem);
     }
     //等待信号量
+    //该函数用于以原子操作的方式将信号量的值减1。原子操作就是，如果两个线程企图同时给一个信号量加1或减1，它们之间不会互相干扰。
+    //等待信号量，如果信号量的值大于0，将信号量的值减1，立即返回。如果信号量的值为0，则线程阻塞。相当于P操作。成功返回0，失败返回-1。m_sem指向的对象是由sem_init调用初始化的信号量。
     bool wait() {
         return sem_wait(&m_sem) == 0;
     }

@@ -18,13 +18,12 @@ const char* error_500_title = "Internal Error";
 const char* error_500_form = "There was an unusual problem serving the request file";
 
 //网站的根目录
-const char* doc_root = "/home/yf415/webServer/resources";
-
+const char* doc_root = "/home/x/WebServes/resources";
 //设置文件描述符非阻塞
 int setnonblocking(int fd) {
-    int old_option = fcntl(fd, F_GETFL);
+    int old_option = fcntl(fd, F_GETFL);  //F_GETFL:获取文件描述符标志
     int new_option = old_option | O_NONBLOCK;
-    fcntl(fd, F_SETFL, new_option);
+    fcntl(fd, F_SETFL, new_option);  //F_SETFL:设置文件状态标志，第三个参数传入新的文件状态标志值
     return old_option;
 }
 
@@ -50,10 +49,11 @@ void removefd(int epollfd, int fd) {
 }
 
 //修改文件描述符,重置socket上的EOPLLONESHOT事件，以确保下一次可读时，EPOLLIN事件能被触发。
+//EOPLLONESHOT:只监听一次事件，当监听完这次事件之后，如果还需要继续监听这个socket的话，需要再次把这个socket加入到EPOLL队列里
 void modfd(int epollfd, int fd, int ev) {
     epoll_event event;
     event.data.fd = fd;
-    event.events = ev | EPOLLONESHOT | EPOLLRDHUP | EPOLLET;
+    event.events = ev | EPOLLONESHOT | EPOLLRDHUP | EPOLLET; //EPOLLET:边缘触发
     epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
 }
 
@@ -71,7 +71,7 @@ void http_conn::init(int sockfd, const sockaddr_in& addr) {
     m_user_count++; //总用户数+1
 
     char ip[16] = "";
-    const char* str = inet_ntop(AF_INET, &addr.sin_addr.s_addr, ip, sizeof(ip));
+    const char* str = inet_ntop(AF_INET, &addr.sin_addr.s_addr, ip, sizeof(ip));   //将地址网络字节序二进制数 转换成 文本串形式
     EMlog(LOGLEVEL_INFO, "The No.%d user. sock_fd = %d, ip = %s.\n", m_user_count, sockfd, str);
 
     init();     //其余信息初始化
@@ -113,6 +113,7 @@ void http_conn::init() {
 //关闭连接
 void http_conn::close_conn() {
     if (m_sockfd != -1) {
+        //一个有效的套接字描述符，会被设置为一个正整数。然而，在某些情况下，比如套接字已经被关闭或者尚未成功打开时，m_sockfd可能会被设置为一个特殊的值来表示其状态。
         m_user_count--; //关闭一个连接，总连接数减1
         EMlog(LOGLEVEL_INFO, "closing fd: %d, rest user num :%d\n", m_sockfd, m_user_count);
         removefd(m_epollfd, m_sockfd);  //移除epoll检测，关闭套接字
@@ -226,7 +227,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text) {
     // GET\0/index.html HTTP/1.1
     *m_url++ = '\0';        // 置位空字符，字符串结束符
     char* method = text;
-    //判断是否是get请求方法，忽略大小写比较
+    //判断是否是get请求方法，strcasecmp忽略大小写比较(strcmp)
     if (strcasecmp(method, "GET") == 0) m_method = GET;
     else return BAD_REQUEST;
 
@@ -287,7 +288,7 @@ http_conn::HTTP_CODE http_conn::parse_headers(char* text) {
     else if (strncasecmp(text, "Host:", 5) == 0) {
         //处理Host头部字段
         text += 5;
-        text += strspn(text, " \t");
+        text += strspn(text, " \t");    // 把字符串转换成长整型数
         m_host = text;
     }
     else {
@@ -338,8 +339,21 @@ http_conn::LINE_STATUS http_conn::parse_line() {
 // 当得到一个完整、正确的HTTP请求时，我们就分析目标文件的属性，
 // 如果目标文件存在、对所有用户可读，且不是目录，则使用mmap将其
 // 映射到内存地址m_file_address处，并告诉调用者获取文件成功
+/*
+char doc_root[256] = "";
+char * path = getenv("PWD");
+strcpy(doc_root, path);
+strcat(doc_root, "/resources");
+chdir(doc_root);  //切换工作目录
+*/ 
 http_conn::HTTP_CODE http_conn::do_request() {
-    // "/home/yf415/webServer/resources"
+    // "/home/x/WebServer/resources"
+    char temp[256] = "";
+    char * path = getenv("PWD");
+    strcpy(temp, path);
+    strcat(temp, "/resources");
+    const char* doc_root = temp;
+
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
     strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);  //拼接目录
@@ -353,11 +367,13 @@ http_conn::HTTP_CODE http_conn::do_request() {
         return FORBIDDEN_REQUEST;
     }
 
-    //判断是否是目录
+    //判断是否是目录  判断是否为普通文件S_ISREG
     if (S_ISDIR(m_file_stat.st_mode)) {
         return BAD_REQUEST;
     }
-
+    /*
+    在这可加中文UTF-8转成16进制，16进制转成10进制，即可识别中文
+    */
     //以只读方式打开文件
     int fd = open(m_real_file, O_RDONLY);
     //创建内存映射

@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    //获取端口号
+    //获取端口号(将argv[1]指向的字符串通过 atoi 函数转换成整数)
     int port = atoi(argv[1]);
 
     //对SIGPIE信号进行处理
@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
     }
 
     //服务端
-    //创建socket
+    //创建socket           IPv4    面向连接可靠  默认协议
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
     if (listenfd == -1) {
         perror("socket\n");
@@ -88,8 +88,8 @@ int main(int argc, char* argv[]) {
     //绑定
     struct sockaddr_in address;
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(port);
+    address.sin_addr.s_addr = INADDR_ANY;  //允许谁访问
+    address.sin_port = htons(port);   //大端转小端
     int ret = bind(listenfd, (struct sockaddr *)&address, sizeof(address));
     if (ret == -1) {
         perror("bind\n");
@@ -109,9 +109,9 @@ int main(int argc, char* argv[]) {
     //将监听的文件描述符添加到epoll对象中
     addfd(epollfd, listenfd, false);
 
-    // 创建管道
+    // 创建套接字
     ret = socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
-    assert( ret != -1 );
+    assert( ret != -1 );  // C/C++中的 assert 是一个宏，用于在运行时检查一个条件是否为真，如果条件不满足，则运行时将终止程序的执行并输出一条错误信息。
     setnonblocking( pipefd[1] );               // 写管道非阻塞
     addfd(epollfd, pipefd[0], false ); // epoll检测读管道
 
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
             else if (sockfd == pipefd[0] && (events[i].events & EPOLLIN)) {
                 int sig;
                 char signals[1024];
-                ret = recv(pipefd[0], signals, sizeof(signals), 0);
+                ret = recv(pipefd[0], signals, sizeof(signals), 0);  //从连接的套接字或绑定的无连接套接字接收数据
                 if (ret == -1) {
                     continue;
                 }
@@ -173,12 +173,12 @@ int main(int argc, char* argv[]) {
                 else {
                     for (int i = 0; i < ret; i++) {
                         switch (signals[i]) {
-                            case SIGALRM:
+                            case SIGALRM:   // 设置进程隔多久后会收到一个SIGALRM信号
                                 // 用timeout变量标记有定时任务需要处理，但不立即处理定时任务
                                 // 这是因为定时任务的优先级不是很高，我们优先处理其他更重要的任务。
                                 timeout = true;
                                 break;
-                            case SIGTERM:
+                            case SIGTERM:  //SIGTERM是kill或killall命令发送到进程的默认信号。它会导致进程终止，但与SIGKILL信号不同，进程可以捕获并解释（或忽略）它。因此，SIGTERM类似于要求进程很好地终止，允许清理和关闭文件。出于这个原因，在关闭期间的许多Unix系统上，init向所有对关闭电源不重要的进程发出SIGTERM，等待几秒钟，然后发出SIGKILL强制终止剩余的任何此类进程。
                                 stop_server = true;
                         }
                     }

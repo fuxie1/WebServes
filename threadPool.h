@@ -56,7 +56,7 @@ threadPool<T>::threadPool(int thread_number, int max_requests) : m_thread_number
         throw std::exception();
     }
 
-    //创建thread_number个线程，并将其设置为线程脱离
+    //创建thread_number个线程，并将其设置为线程分离
     for (int i = 0; i < thread_number; i++) {
         printf("create the %dth thread\n", i);
 
@@ -66,7 +66,8 @@ threadPool<T>::threadPool(int thread_number, int max_requests) : m_thread_number
             throw std::exception();
         }
 
-        //设置线程脱离
+        //设置线程分离 (避免了僵尸进程的出现)
+        //pthread_join函数会阻塞
         if (pthread_detach(m_threads[i])) {
             delete[] m_threads;
             throw std::exception();
